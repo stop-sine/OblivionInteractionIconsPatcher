@@ -113,7 +113,6 @@ namespace OblivionInteractionIconsPatcher
                 //Skip empty plugins
                 if (plugin is null) continue;
 
-                Console.WriteLine(plugin.ModKey.FileName);
 
                 //Create collection of flora records
                 var florae = new List<Record>();
@@ -176,7 +175,7 @@ namespace OblivionInteractionIconsPatcher
                     if (activator.FormKey.ModKey != plugin.ModKey)
                     {
                         var origin = activator.FormKey.ToLink<IActivatorGetter>().ResolveAll(env.LinkCache).Last();
-                        if (activator.ActivateTextOverride == origin.ActivateTextOverride && activator.Name == origin.Name) continue;
+                        if (activator.ActivateTextOverride?.String == origin.ActivateTextOverride?.String && activator.Name?.String == origin.Name?.String) continue;
                     }
 
                     //Default
@@ -286,7 +285,7 @@ namespace OblivionInteractionIconsPatcher
                             || full.Contains(["bed", "hammock", "coffin"], StringComparison.OrdinalIgnoreCase))
                         iconCharacter = "a";
                     //Torch
-                    else if (edid.ContainsNullable("torchsconce", StringComparison.OrdinalIgnoreCase))
+                    else if (edid.ContainsNullable("sconce", StringComparison.OrdinalIgnoreCase))
                         iconCharacter = "i";
                     //Dragon Claw
                     else if (full.ContainsNullable("keyhole", StringComparison.OrdinalIgnoreCase))
@@ -318,16 +317,21 @@ namespace OblivionInteractionIconsPatcher
                     activators.Add(record);
                 }
 
-                var jsonDirectory = Directory.CreateDirectory(plugin.ModKey.FileName);
-                Directory.SetCurrentDirectory(jsonDirectory.Name);
-                var jsonPath = plugin.ModKey.Name.ToLower();
-                var floraJsonStrings = JsonSerializer.Serialize(florae, serializeOptions);
-                if (florae.Count > 0)
-                    File.WriteAllText(jsonPath + "flora.json", floraJsonStrings);
-                var activatorJsonStrings = JsonSerializer.Serialize(activators, serializeOptions);
-                if (activators.Count > 0)
-                    File.WriteAllText(jsonPath + "acti.json", activatorJsonStrings);
-                Directory.SetCurrentDirectory(dsdPath.FullName);
+                if (florae.Count > 0 || activators.Count > 0)
+                {
+                    Console.WriteLine(plugin.ModKey.FileName);
+                    var jsonDirectory = Directory.CreateDirectory(plugin.ModKey.FileName);
+                    Directory.SetCurrentDirectory(jsonDirectory.Name);
+                    var jsonPath = plugin.ModKey.Name.ToLower();
+                    var floraJsonStrings = JsonSerializer.Serialize(florae, serializeOptions);
+                    if (florae.Count > 0)
+                        File.WriteAllText(jsonPath + "flora.json", floraJsonStrings);
+                    var activatorJsonStrings = JsonSerializer.Serialize(activators, serializeOptions);
+                    if (activators.Count > 0)
+                        File.WriteAllText(jsonPath + "acti.json", activatorJsonStrings);
+                    Directory.SetCurrentDirectory(dsdPath.FullName);
+                }
+
             }
         }
 
