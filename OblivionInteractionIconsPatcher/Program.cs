@@ -82,6 +82,25 @@ namespace OblivionInteractionIconsPatcher
                 : $"<font face='$Iconographia'> {iconCharacter} </font>";
 
         /// <summary>
+        /// Sanitizes a filename by removing invalid path characters and restricting directory traversal.
+        /// </summary>
+        private static string SanitizeFileName(string fileName)
+        {
+            // Remove invalid file/path characters
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var sanitized = new string(fileName.Where(c => !invalidChars.Contains(c)).ToArray());
+
+            // Prevent directory traversal
+            sanitized = sanitized.Replace(".", "").Replace("\\", "").Replace("/", "");
+
+            // Optionally, restrict length
+            if (sanitized.Length > 100)
+                sanitized = sanitized.Substring(0, 100);
+
+            return sanitized;
+        }
+
+        /// <summary>
         /// Main entry point. Processes all enabled plugins and writes flora/activator icon JSON files.
         /// </summary>
         public static void Main(string[] args)
@@ -140,14 +159,19 @@ namespace OblivionInteractionIconsPatcher
                 if (florae.Count > 0 || activators.Count > 0)
                 {
                     Console.WriteLine(plugin.ModKey.FileName);
-                    var jsonDirectory = Path.Combine(dsdPath, plugin.ModKey.FileName);
+
+                    // Sanitize directory and file names to prevent path injection
+                    var safeDirName = SanitizeFileName(plugin.ModKey.FileName);
+                    var safeBaseName = SanitizeFileName(plugin.ModKey.Name.ToLower());
+
+                    var jsonDirectory = Path.Combine(dsdPath, safeDirName);
                     Directory.CreateDirectory(jsonDirectory);
 
                     if (florae.Count > 0)
-                        File.WriteAllText(Path.Combine(jsonDirectory, $"{plugin.ModKey.Name.ToLower()}flora.json"),
+                        File.WriteAllText(Path.Combine(jsonDirectory, $"{safeBaseName}flora.json"),
                             JsonSerializer.Serialize(florae, serializeOptions));
                     if (activators.Count > 0)
-                        File.WriteAllText(Path.Combine(jsonDirectory, $"{plugin.ModKey.Name.ToLower()}acti.json"),
+                        File.WriteAllText(Path.Combine(jsonDirectory, $"{safeBaseName}acti.json"),
                             JsonSerializer.Serialize(activators, serializeOptions));
                 }
             }
