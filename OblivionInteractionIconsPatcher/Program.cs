@@ -100,7 +100,6 @@ namespace OblivionInteractionIconsPatcher
             }
 
             var plugins = env.LoadOrder.ListedOrder.OnlyEnabled().Select(m => m.Mod).Where(PluginFilter).ToList();
-            //plugins.ForEach(p => Console.WriteLine(p?.ModKey.FileName));
 
             var serializeOptions = new JsonSerializerOptions
             {
@@ -180,7 +179,6 @@ namespace OblivionInteractionIconsPatcher
                         if (activator.ActivateTextOverride == origin.ActivateTextOverride && activator.Name == origin.Name) continue;
                     }
 
-
                     //Default
                     string iconCharacter = "W";
 
@@ -194,25 +192,25 @@ namespace OblivionInteractionIconsPatcher
                     //Steal
                     else if (rnam.EqualsNullable("steal", StringComparison.OrdinalIgnoreCase))
                     {
-                        iconColor = "ff0000";
+                        iconColor = "#ff0000";
                         iconCharacter = "S";
                     }
                     //Pickpocket
                     else if (rnam.EqualsNullable("pickpocket", StringComparison.OrdinalIgnoreCase))
                     {
-                        iconColor = "ff0000";
+                        iconColor = "#ff0000";
                         iconCharacter = "b";
                     }
                     //Steal From
                     else if (rnam.EqualsNullable("steal from", StringComparison.OrdinalIgnoreCase))
                     {
-                        iconColor = "ff0000";
+                        iconColor = "#ff0000";
                         iconCharacter = "V";
                     }
                     //Close
                     else if (rnam.EqualsNullable("close", StringComparison.OrdinalIgnoreCase))
                     {
-                        iconColor = "dddddd";
+                        iconColor = "#dddddd";
                         iconCharacter = "X";
                     }
                     //Chest | Search | Open Chest
@@ -333,7 +331,7 @@ namespace OblivionInteractionIconsPatcher
             }
         }
 
-        [System.Text.RegularExpressions.GeneratedRegex(@"color\s*=\s*['""](#[0-9A-Fa-f]{6})['""]")]
+        [System.Text.RegularExpressions.GeneratedRegex(@"color\s*=\s*['""]#([0-9A-Fa-f]{6})['""]")]
         private static partial System.Text.RegularExpressions.Regex MyRegex();
     }
 }
