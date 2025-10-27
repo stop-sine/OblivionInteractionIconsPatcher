@@ -160,18 +160,14 @@ namespace OblivionInteractionIconsPatcher
                 {
                     Console.WriteLine(plugin.ModKey.FileName);
 
-                    // Sanitize directory and file names to prevent path injection
-                    var safeDirName = SanitizeFileName(plugin.ModKey.FileName);
-                    var safeBaseName = SanitizeFileName(plugin.ModKey.Name.ToLower());
-
-                    var jsonDirectory = Path.Combine(dsdPath, safeDirName);
+                    var jsonDirectory = Path.Combine(dsdPath, plugin.ModKey.FileName);
                     Directory.CreateDirectory(jsonDirectory);
 
                     if (florae.Count > 0)
-                        File.WriteAllText(Path.Combine(jsonDirectory, $"{safeBaseName}flora.json"),
+                        File.WriteAllText(Path.Combine(jsonDirectory, $"{plugin.ModKey.Name.ToLower()}flora.json"),
                             JsonSerializer.Serialize(florae, serializeOptions));
                     if (activators.Count > 0)
-                        File.WriteAllText(Path.Combine(jsonDirectory, $"{safeBaseName}acti.json"),
+                        File.WriteAllText(Path.Combine(jsonDirectory, $"{plugin.ModKey.Name.ToLower()}acti.json"),
                             JsonSerializer.Serialize(activators, serializeOptions));
                 }
             }
