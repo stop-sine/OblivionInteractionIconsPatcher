@@ -88,7 +88,7 @@ namespace OblivionInteractionIconsPatcher
         {
             // Remove invalid file/path characters
             var invalidChars = Path.GetInvalidFileNameChars();
-            var sanitized = new string(fileName.Where(c => !invalidChars.Contains(c)).ToArray());
+            var sanitized = new string([.. fileName.Where(c => !invalidChars.Contains(c))]);
 
             // Prevent directory traversal
             sanitized = sanitized.Replace(".", "").Replace("\\", "").Replace("/", "");
