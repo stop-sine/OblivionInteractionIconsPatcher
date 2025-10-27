@@ -95,7 +95,7 @@ namespace OblivionInteractionIconsPatcher
 
             // Optionally, restrict length
             if (sanitized.Length > 100)
-                sanitized = sanitized.Substring(0, 100);
+                sanitized = sanitized[..100];
 
             return sanitized;
         }
