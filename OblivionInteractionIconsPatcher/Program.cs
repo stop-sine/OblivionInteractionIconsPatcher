@@ -188,22 +188,28 @@ namespace OblivionInteractionIconsPatcher
             var full = flora.Name?.String;
             var rnam = flora.ActivateTextOverride?.String;
 
+            //Mushrooms
             if (flora.HarvestSound.FormKey.Equals(Skyrim.SoundDescriptor.ITMIngredientMushroomUp.FormKey)
                 || full.Contains(["spore", "cap", "crown", "shroom"], StringComparison.OrdinalIgnoreCase))
                 return "A";
+            //Clams
             if (flora.HarvestSound.FormKey.Equals(Skyrim.SoundDescriptor.ITMIngredientClamUp.FormKey)
                 || full.ContainsNullable("clam", StringComparison.OrdinalIgnoreCase))
                 return "b";
+            //Fill | Cask or Barrel (Fill)
             if (flora.HarvestSound.FormKey.Equals(Skyrim.SoundDescriptor.ITMPotionUpSD.FormKey)
                 || rnam.ContainsNullable("fill bottles", StringComparison.OrdinalIgnoreCase)
                 || full.Contains(["barrel", "cask"], StringComparison.OrdinalIgnoreCase))
                 return "L";
+            //Coin Pouch
             if (flora.HarvestSound.FormKey.Equals(Skyrim.SoundDescriptor.ITMCoinPouchUp.FormKey)
                 || flora.HarvestSound.FormKey.Equals(Skyrim.SoundDescriptor.ITMCoinPouchDown.FormKey)
                 || full.ContainsNullable("coin purse", StringComparison.OrdinalIgnoreCase))
                 return "S";
+            //Catch, Scavenge
             if (rnam.Equals(["catch", "scavenge"], StringComparison.OrdinalIgnoreCase))
                 return "S";
+            //Default
             return "Q";
         }
 
@@ -242,83 +248,113 @@ namespace OblivionInteractionIconsPatcher
             var edid = activator.EditorID;
             var rnam = activator.ActivateTextOverride?.String;
 
-            // Exclude superfluous entries
+            // Blacklisting superfluous entries
             if (activator.ActivateTextOverride == null && edid.Contains(["trigger", "fx"], StringComparison.OrdinalIgnoreCase))
                 return (string.Empty, null);
-
+            //Steal
             if (rnam.EqualsNullable("steal", StringComparison.OrdinalIgnoreCase))
                 return ("S", "#ff0000");
+            //Pickpocket
             if (rnam.EqualsNullable("pickpocket", StringComparison.OrdinalIgnoreCase))
                 return ("b", "#ff0000");
+            //Steal From
             if (rnam.EqualsNullable("steal from", StringComparison.OrdinalIgnoreCase))
                 return ("V", "#ff0000");
+            //Close
             if (rnam.EqualsNullable("close", StringComparison.OrdinalIgnoreCase))
                 return ("X", "#dddddd");
+            //Chest, Search, Open Chest
             if (full.EqualsNullable("chest", StringComparison.OrdinalIgnoreCase)
                 || rnam.EqualsNullable("search", StringComparison.OrdinalIgnoreCase)
                 || (full.ContainsNullable("chest", StringComparison.OrdinalIgnoreCase) && rnam.EqualsNullable("open", StringComparison.OrdinalIgnoreCase)))
                 return ("V", null);
+            //Grab, Touch
             if (rnam.Equals(["grab", "touch"], StringComparison.OrdinalIgnoreCase))
                 return ("S", null);
+            //Levers
             if ((activator.Keywords != null && activator.Keywords.Contains(Skyrim.Keyword.ActivatorLever.FormKey))
                 || full.ContainsNullable("lever", StringComparison.OrdinalIgnoreCase)
                 || edid.ContainsNullable("pullbar", StringComparison.OrdinalIgnoreCase))
                 return ("D", null);
+            //Chain
             if (full.ContainsNullable("chain", StringComparison.OrdinalIgnoreCase))
                 return ("E", null);
+            //Mine
             if (rnam.EqualsNullable("mine", StringComparison.OrdinalIgnoreCase))
                 return ("G", null);
+            //Button, Press, Examine, Push, Investigate
             if (full.ContainsNullable("button", StringComparison.OrdinalIgnoreCase)
                 || rnam.Equals(["press", "examine", "push", "investigate"], StringComparison.OrdinalIgnoreCase))
                 return ("F", null);
+            //Business Ledger, Write
             if (full.ContainsNullable("ledger", StringComparison.OrdinalIgnoreCase)
                 || rnam.EqualsNullable("write", StringComparison.OrdinalIgnoreCase))
                 return ("H", null);
+            //Pray
             if (full.Contains(["shrine", "altar"], StringComparison.OrdinalIgnoreCase)
                 || edid.ContainsNullable("dlc2standingstone", StringComparison.OrdinalIgnoreCase)
                 || rnam.Equals(["pray", "worship"], StringComparison.OrdinalIgnoreCase))
                 return ("C", null);
+            //Drink
             if (rnam.EqualsNullable("drink", StringComparison.OrdinalIgnoreCase))
                 return ("J", null);
+            //Eat
             if (rnam.EqualsNullable("eat", StringComparison.OrdinalIgnoreCase))
                 return ("K", null);
+            //Drop, Place, Exchange
             if (rnam.Equals(["drop", "place", "exchange"], StringComparison.OrdinalIgnoreCase))
                 return ("N", null);
+            //Pick Up
             if (rnam.EqualsNullable("pick up", StringComparison.OrdinalIgnoreCase))
                 return ("O", null);
+            //Read
             if (rnam.EqualsNullable("read", StringComparison.OrdinalIgnoreCase))
                 return ("P", null);
+            //Harvest
             if (rnam.EqualsNullable("harvest", StringComparison.OrdinalIgnoreCase))
                 return ("Q", null);
+            //Take or Catch
             if (rnam.Equals(["take", "catch"], StringComparison.OrdinalIgnoreCase))
                 return ("S", null);
+            //Talk, Speak
             if (rnam.Equals(["talk", "speak"], StringComparison.OrdinalIgnoreCase))
                 return ("T", null);
+            //Sit
             if (rnam.EqualsNullable("sit", StringComparison.OrdinalIgnoreCase))
                 return ("U", null);
+            //Open Door
             if (rnam.EqualsNullable("open", StringComparison.OrdinalIgnoreCase))
                 return ("X", null);
+            //Activate
             if (rnam.EqualsNullable("activate", StringComparison.OrdinalIgnoreCase))
                 return ("Y", null);
+            //Unlock
             if (rnam.EqualsNullable("unlock", StringComparison.OrdinalIgnoreCase))
                 return ("Z", null);
+            //Sleep
             if (rnam.EqualsNullable("sleep", StringComparison.OrdinalIgnoreCase)
                 || full.Contains(["bed", "hammock", "coffin"], StringComparison.OrdinalIgnoreCase))
                 return ("a", null);
+            //Torch, Sconce
             if (edid.ContainsNullable("sconce", StringComparison.OrdinalIgnoreCase))
                 return ("i", null);
+            //Dragon Claw
             if (full.ContainsNullable("keyhole", StringComparison.OrdinalIgnoreCase))
                 return ("j", null);
+            //Civil War Map & Map Marker (Flags)
             if (edid.ContainsNullable("cwmap", StringComparison.OrdinalIgnoreCase))
                 return ("F", null);
+            //EVG Ladder | Float, Climb
             if (edid.ContainsNullable("ladder", StringComparison.OrdinalIgnoreCase)
                 || rnam.Equals(["float", "climb"], StringComparison.OrdinalIgnoreCase))
                 return ("d", null);
+            //EVG Squeeze
             if (edid.ContainsNullable("squeeze", StringComparison.OrdinalIgnoreCase))
                 return ("e", null);
+            //CC Fishing
             if (full.ContainsNullable("fishing supplies", StringComparison.OrdinalIgnoreCase))
                 return ("I", null);
-
+            //Default
             return ("W", null);
         }
     }
