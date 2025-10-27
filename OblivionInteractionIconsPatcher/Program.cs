@@ -12,20 +12,35 @@ using Mutagen.Bethesda.Plugins;
 
 namespace OblivionInteractionIconsPatcher
 {
+    /// <summary>
+    /// Main patcher logic for generating interaction icon JSON files for Skyrim mods.
+    /// </summary>
     partial class Program
     {
+        /// <summary>
+        /// Regex to extract color hex code from a string.
+        /// </summary>
         [System.Text.RegularExpressions.GeneratedRegex(@"color\s*=\s*['""]#([0-9A-Fa-f]{6})['""]")]
         private static partial System.Text.RegularExpressions.Regex MyRegex();
 
+        /// <summary>
+        /// List of official Bethesda plugin ModKeys to exclude from patching.
+        /// </summary>
         private static readonly ModKey[] BethesdaPlugins =
         [
             Skyrim.ModKey, Update.ModKey, Dawnguard.ModKey,
             Dragonborn.ModKey, HearthFires.ModKey
         ];
 
+        /// <summary>
+        /// Set of Creation Club plugin ModKeys to exclude from patching.
+        /// </summary>
         private static readonly HashSet<ModKey> CreationClubPlugins =
             GetCreationClubPlugins(GameEnvironment.Typical.Skyrim(SkyrimRelease.SkyrimSE).CreationClubListingsFilePath ?? string.Empty);
 
+        /// <summary>
+        /// Reads Creation Club plugin ModKeys from the listings file.
+        /// </summary>
         private static HashSet<ModKey> GetCreationClubPlugins(FilePath path)
         {
             if (!File.Exists(path)) return [];
@@ -42,6 +57,9 @@ namespace OblivionInteractionIconsPatcher
             }
         }
 
+        /// <summary>
+        /// Determines if a mod should be processed (not official, not CC, not skymoji, and has flora or activators).
+        /// </summary>
         private static bool PluginFilter(ISkyrimModGetter? mod) =>
             mod is not null &&
             !BethesdaPlugins.Contains(mod.ModKey) &&
@@ -49,21 +67,32 @@ namespace OblivionInteractionIconsPatcher
             !mod.ModKey.Name.Contains("skymoji") &&
             (mod.Florae.Count > 0 || mod.Activators.Count > 0);
 
+        /// <summary>
+        /// Formats a FormKey as a string for JSON output.
+        /// </summary>
         private static string PackageFormKey(FormKey formKey) =>
             $"{formKey.IDString()}|{formKey.ModKey.FileName}";
 
+        /// <summary>
+        /// Formats an icon string with optional color for JSON output.
+        /// </summary>
         private static string PackageIcon(string iconCharacter, string? iconColor) =>
             !iconColor.IsNullOrEmpty()
                 ? $"<font color='{iconColor}'><font face='$Iconographia'> {iconCharacter} </font></font>"
                 : $"<font face='$Iconographia'> {iconCharacter} </font>";
 
+        /// <summary>
+        /// Main entry point. Processes all enabled plugins and writes flora/activator icon JSON files.
+        /// </summary>
         public static void Main(string[] args)
         {
+            // Set up Skyrim SE environment and output directory
             var env = GameEnvironment.Typical.Skyrim(SkyrimRelease.SkyrimSE);
             var dataPath = env.DataFolderPath.Path;
             var dsdPath = Path.Combine(dataPath, "SKSE\\Plugins\\DynamicStringDistributor1");
             Directory.CreateDirectory(dsdPath);
 
+            // Try to extract icon color from skymoji JSON if present
             string? iconColor = null;
             var skymojiPath = Path.Combine(dsdPath, "skyrim.esm", "skymojiactivators10.json");
             if (File.Exists(skymojiPath))
@@ -88,21 +117,26 @@ namespace OblivionInteractionIconsPatcher
                 }
             }
 
+            // Get all enabled plugins that pass the filter
             var plugins = env.LoadOrder.ListedOrder.OnlyEnabled().Select(m => m.Mod).Where(PluginFilter).ToList();
 
+            // Set up JSON serialization options
             var serializeOptions = new JsonSerializerOptions
             {
                 WriteIndented = true,
                 Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
             };
 
+            // Process each plugin
             foreach (var plugin in plugins)
             {
                 if (plugin is null) continue;
 
+                // Generate flora and activator records
                 var florae = ProcessFlora(plugin, env, iconColor);
                 var activators = ProcessActivators(plugin, env, iconColor);
 
+                // Write JSON files if there are any records
                 if (florae.Count > 0 || activators.Count > 0)
                 {
                     Console.WriteLine(plugin.ModKey.FileName);
@@ -119,11 +153,15 @@ namespace OblivionInteractionIconsPatcher
             }
         }
 
+        /// <summary>
+        /// Processes all flora records in a plugin and returns a list of output records.
+        /// </summary>
         private static List<Record> ProcessFlora(ISkyrimModGetter plugin, IGameEnvironment<ISkyrimMod, ISkyrimModGetter> env, string? iconColor)
         {
             var florae = new List<Record>();
             foreach (var flora in plugin.Florae)
             {
+                // Skip if flora is unchanged from its origin
                 if (flora.FormKey.ModKey != plugin.ModKey)
                 {
                     var origin = flora.FormKey.ToLink<IFloraGetter>().ResolveAll(env.LinkCache).Last();
@@ -142,6 +180,9 @@ namespace OblivionInteractionIconsPatcher
             return florae;
         }
 
+        /// <summary>
+        /// Determines the icon character for a flora record.
+        /// </summary>
         private static string GetFloraIcon(IFloraGetter flora)
         {
             var full = flora.Name?.String;
@@ -166,11 +207,15 @@ namespace OblivionInteractionIconsPatcher
             return "Q";
         }
 
+        /// <summary>
+        /// Processes all activator records in a plugin and returns a list of output records.
+        /// </summary>
         private static List<Record> ProcessActivators(ISkyrimModGetter plugin, IGameEnvironment<ISkyrimMod, ISkyrimModGetter> env, string? iconColor)
         {
             var activators = new List<Record>();
             foreach (var activator in plugin.Activators)
             {
+                // Skip if activator is unchanged from its origin
                 if (activator.FormKey.ModKey != plugin.ModKey)
                 {
                     var origin = activator.FormKey.ToLink<IActivatorGetter>().ResolveAll(env.LinkCache).Last();
@@ -188,6 +233,9 @@ namespace OblivionInteractionIconsPatcher
             return activators;
         }
 
+        /// <summary>
+        /// Determines the icon character and color override for an activator record.
+        /// </summary>
         private static (string icon, string? colorOverride) GetActivatorIconAndColor(IActivatorGetter activator)
         {
             var full = activator.Name?.String;
