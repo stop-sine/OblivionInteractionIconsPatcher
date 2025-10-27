@@ -12,27 +12,29 @@ using Mutagen.Bethesda.Plugins;
 
 namespace OblivionInteractionIconsPatcher
 {
-    partial class Progam
+    partial class Program
     {
+        [System.Text.RegularExpressions.GeneratedRegex(@"color\s*=\s*['""]#([0-9A-Fa-f]{6})['""]")]
+        private static partial System.Text.RegularExpressions.Regex MyRegex();
+
         private static readonly ModKey[] BethesdaPlugins =
         [
             Skyrim.ModKey, Update.ModKey, Dawnguard.ModKey,
             Dragonborn.ModKey, HearthFires.ModKey
         ];
 
-        private static readonly HashSet<ModKey> CreationClubPlugins
-        = GetCreationClubPlugins(GameEnvironment.Typical.Skyrim(SkyrimRelease.SkyrimSE).CreationClubListingsFilePath ?? string.Empty);
+        private static readonly HashSet<ModKey> CreationClubPlugins =
+            GetCreationClubPlugins(GameEnvironment.Typical.Skyrim(SkyrimRelease.SkyrimSE).CreationClubListingsFilePath ?? string.Empty);
 
-        private static HashSet<ModKey> GetCreationClubPlugins(FilePath CreationClubListingsFilePath)
+        private static HashSet<ModKey> GetCreationClubPlugins(FilePath path)
         {
+            if (!File.Exists(path)) return [];
             try
             {
-                if (!File.Exists(CreationClubListingsFilePath))
-                    return [];
-                return [.. File.ReadAllLines(CreationClubListingsFilePath)
-                .Select(line => ModKey.TryFromFileName(new FileName(line)))
-                .Where(plugin => plugin.HasValue)
-                .Select(plugin => plugin!.Value)];
+                return [.. File.ReadAllLines(path)
+                    .Select(line => ModKey.TryFromFileName(new FileName(line)))
+                    .Where(plugin => plugin.HasValue)
+                    .Select(plugin => plugin!.Value)];
             }
             catch
             {
@@ -40,54 +42,41 @@ namespace OblivionInteractionIconsPatcher
             }
         }
 
-        private static bool PluginFilter(ISkyrimModGetter? mod)
-        {
-            if (mod is null) return false;
-            if (BethesdaPlugins.Contains(mod.ModKey)) return false;
-            if (CreationClubPlugins.Contains(mod.ModKey)) return false;
-            if (mod.ModKey.Name.Contains("skymoji")) return false;
-            if (mod.Florae.Count == 0 && mod.Activators.Count == 0) return false;
-            return true;
-        }
+        private static bool PluginFilter(ISkyrimModGetter? mod) =>
+            mod is not null &&
+            !BethesdaPlugins.Contains(mod.ModKey) &&
+            !CreationClubPlugins.Contains(mod.ModKey) &&
+            !mod.ModKey.Name.Contains("skymoji") &&
+            (mod.Florae.Count > 0 || mod.Activators.Count > 0);
 
-        private static string PackageFormKey(FormKey formKey)
-        {
-            return formKey.IDString() + "|" + formKey.ModKey.FileName;
-        }
+        private static string PackageFormKey(FormKey formKey) =>
+            $"{formKey.IDString()}|{formKey.ModKey.FileName}";
 
-        private static string PackageIcon(string iconCharacter, string? iconColor)
-        {
-            var icon = "<font face='$Iconographia'> " + iconCharacter + " </font>";
-            if (!iconColor.IsNullOrEmpty())
-                icon = "<font color='" + iconColor + "'>" + icon + "</font>";
-            return icon;
-        }
+        private static string PackageIcon(string iconCharacter, string? iconColor) =>
+            !iconColor.IsNullOrEmpty()
+                ? $"<font color='{iconColor}'><font face='$Iconographia'> {iconCharacter} </font></font>"
+                : $"<font face='$Iconographia'> {iconCharacter} </font>";
 
         public static void Main(string[] args)
         {
-            //Set Skyrim SE environment
             var env = GameEnvironment.Typical.Skyrim(SkyrimRelease.SkyrimSE);
-            //Path to Skyrim SE data directory
             var dataPath = env.DataFolderPath.Path;
-            //Path to Dynamic String Distributor directory
-            var dsdPath = Directory.CreateDirectory(Path.Combine(dataPath, "SKSE\\Plugins\\DynamicStringDistributor1"));
-            Directory.SetCurrentDirectory(dsdPath.FullName);
+            var dsdPath = Path.Combine(dataPath, "SKSE\\Plugins\\DynamicStringDistributor1");
+            Directory.CreateDirectory(dsdPath);
 
             string? iconColor = null;
-            List<Record>? data = null;
-            if (File.Exists("skyrim.esm\\skymojiactivators10.json"))
+            var skymojiPath = Path.Combine(dsdPath, "skyrim.esm", "skymojiactivators10.json");
+            if (File.Exists(skymojiPath))
             {
                 try
                 {
-                    data = JsonSerializer.Deserialize<List<Record>>(File.ReadAllText("skyrim.esm\\skymojiactivators10.json"));
-                    if (data == null || data.Count == 0)
+                    var data = JsonSerializer.Deserialize<List<Record>>(File.ReadAllText(skymojiPath));
+                    if (data?.Count > 0)
                     {
-                        Console.WriteLine("Error: Deserialized data is null or empty.");
-                        return;
+                        var match = MyRegex().Match(data.First().@string);
+                        if (match.Success)
+                            iconColor = match.Groups[1].Value;
                     }
-                    var match = MyRegex().Match(data.First().@string);
-                    if (match.Success)
-                        iconColor = match.Groups[1].Value;
                 }
                 catch (JsonException ex)
                 {
@@ -107,235 +96,182 @@ namespace OblivionInteractionIconsPatcher
                 Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
             };
 
-            //Iterate through all plugins
             foreach (var plugin in plugins)
             {
-                //Skip empty plugins
                 if (plugin is null) continue;
 
-
-                //Create collection of flora records
-                var florae = new List<Record>();
-                //Iterate through flora records in plugin
-                foreach (var flora in plugin.Florae)
-                {
-                    if (flora.FormKey.ModKey != plugin.ModKey)
-                    {
-                        var origin = flora.FormKey.ToLink<IFloraGetter>().ResolveAll(env.LinkCache).Last();
-                        if (flora.ActivateTextOverride == origin.ActivateTextOverride && flora.Name == origin.Name) continue;
-                    }
-
-                    //Default icon
-                    string iconCharacter = "Q";
-
-                    var full = flora.Name?.String;
-                    var rnam = flora.ActivateTextOverride?.String;
-
-                    //Mushrooms
-                    if (flora.HarvestSound.FormKey.Equals(Skyrim.SoundDescriptor.ITMIngredientMushroomUp.FormKey)
-                    || full.Contains(["spore", "cap", "crown", "shroom"], StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "A";
-                    //Clams
-                    else if (flora.HarvestSound.FormKey.Equals(Skyrim.SoundDescriptor.ITMIngredientClamUp.FormKey)
-                    || full.ContainsNullable("clam", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "b";
-                    //Fill | Cask or Barrel (Fill)
-                    else if (flora.HarvestSound.FormKey.Equals(Skyrim.SoundDescriptor.ITMPotionUpSD.FormKey)
-                    || rnam.ContainsNullable("fill bottles", StringComparison.OrdinalIgnoreCase)
-                    || full.Contains(["barrel", "cask"], StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "L";
-                    //Coin Pouch
-                    else if (flora.HarvestSound.FormKey.Equals(Skyrim.SoundDescriptor.ITMCoinPouchUp.FormKey)
-                    || flora.HarvestSound.FormKey.Equals(Skyrim.SoundDescriptor.ITMCoinPouchDown.FormKey)
-                    || full.ContainsNullable("coin purse", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "S";
-                    //Catch, Scavenge
-                    else if (rnam.Equals(["catch", "scavenge"], StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "S";
-                    //Other Flora
-                    else
-                        iconCharacter = "Q";
-
-                    //Create entry for record
-                    var record = new Record
-                    {
-                        form_id = PackageFormKey(flora.FormKey),
-                        type = "FLOR RNAM",
-                        @string = PackageIcon(iconCharacter, iconColor)
-
-                    };
-                    florae.Add(record);
-                }
-
-                //Create collection of activator records
-                var activators = new List<Record>();
-                //Iterate through activator records in plugin
-                foreach (var activator in plugin.Activators)
-                {
-                    if (activator.FormKey.ModKey != plugin.ModKey)
-                    {
-                        var origin = activator.FormKey.ToLink<IActivatorGetter>().ResolveAll(env.LinkCache).Last();
-                        if (activator.ActivateTextOverride?.String == origin.ActivateTextOverride?.String && activator.Name?.String == origin.Name?.String) continue;
-                    }
-
-                    //Default
-                    string iconCharacter = "W";
-
-                    var full = activator.Name?.String;
-                    var edid = activator.EditorID;
-                    var rnam = activator.ActivateTextOverride?.String;
-
-                    //Exclude superfluous entries
-                    if (activator.ActivateTextOverride == null && edid.Contains(["trigger", "fx"], StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    //Steal
-                    else if (rnam.EqualsNullable("steal", StringComparison.OrdinalIgnoreCase))
-                    {
-                        iconColor = "#ff0000";
-                        iconCharacter = "S";
-                    }
-                    //Pickpocket
-                    else if (rnam.EqualsNullable("pickpocket", StringComparison.OrdinalIgnoreCase))
-                    {
-                        iconColor = "#ff0000";
-                        iconCharacter = "b";
-                    }
-                    //Steal From
-                    else if (rnam.EqualsNullable("steal from", StringComparison.OrdinalIgnoreCase))
-                    {
-                        iconColor = "#ff0000";
-                        iconCharacter = "V";
-                    }
-                    //Close
-                    else if (rnam.EqualsNullable("close", StringComparison.OrdinalIgnoreCase))
-                    {
-                        iconColor = "#dddddd";
-                        iconCharacter = "X";
-                    }
-                    //Chest | Search | Open Chest
-                    else if (full.EqualsNullable("chest", StringComparison.OrdinalIgnoreCase)
-                            || rnam.EqualsNullable("search", StringComparison.OrdinalIgnoreCase)
-                            || full.ContainsNullable("chest", StringComparison.OrdinalIgnoreCase) && rnam.EqualsNullable("open", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "V";
-                    //Grab & Touch
-                    else if (rnam.Equals(["grab", "touch"], StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "S";
-                    //Levers
-                    else if (activator.Keywords != null && activator.Keywords.Contains(Skyrim.Keyword.ActivatorLever.FormKey)
-                            || full.ContainsNullable("lever", StringComparison.OrdinalIgnoreCase)
-                            || edid.ContainsNullable("pullbar", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "D";
-                    //Chains
-                    else if (full.ContainsNullable("chain", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "E";
-                    //Mine
-                    else if (rnam.EqualsNullable("mine", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "G";
-                    //Button | Press, Examine, Push, Investigate
-                    else if (full.ContainsNullable("button", StringComparison.OrdinalIgnoreCase)
-                            || rnam.Equals(["press", "examine", "push", "investigate"], StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "F";
-                    //Business Ledger | Write
-                    else if (full.ContainsNullable("ledger", StringComparison.OrdinalIgnoreCase)
-                            || rnam.EqualsNullable("write", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "H";
-                    //Pray
-                    else if (full.Contains(["shrine", "altar"], StringComparison.OrdinalIgnoreCase)
-                            || edid.ContainsNullable("dlc2standingstone", StringComparison.OrdinalIgnoreCase)
-                            || rnam.Equals(["pray", "worship"], StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "C";
-                    //Drink
-                    else if (rnam.EqualsNullable("drink", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "J";
-                    //Eat
-                    else if (rnam.EqualsNullable("eat", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "K";
-                    //Drop, Place, Exchange
-                    else if (rnam.Equals(["drop", "place", "exchange"], StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "N";
-                    //Pick up
-                    else if (rnam.EqualsNullable("pick up", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "O";
-                    //Read
-                    else if (rnam.EqualsNullable("read", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "P";
-                    //Harvest
-                    else if (rnam.EqualsNullable("harvest", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "Q";
-                    //Take or Catch
-                    else if (rnam.Equals(["take", "catch"], StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "S";
-                    //Talk, Speak
-                    else if (rnam.Equals(["talk", "speak"], StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "T";
-                    //Sit
-                    else if (rnam.EqualsNullable("sit", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "U";
-                    //Open (Door)
-                    else if (rnam.EqualsNullable("open", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "X";
-                    //Activate
-                    else if (rnam.EqualsNullable("activate", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "Y";
-                    //Unlock
-                    else if (rnam.EqualsNullable("unlock", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "Z";
-                    //Sleep
-                    else if (rnam.EqualsNullable("sleep", StringComparison.OrdinalIgnoreCase)
-                            || full.Contains(["bed", "hammock", "coffin"], StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "a";
-                    //Torch
-                    else if (edid.ContainsNullable("sconce", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "i";
-                    //Dragon Claw
-                    else if (full.ContainsNullable("keyhole", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "j";
-                    //Civil War Map & Map Marker (Flags)
-                    else if (edid.ContainsNullable("cwmap", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "F";
-                    //EVG Ladder | Float, Climb
-                    else if (edid.ContainsNullable("ladder", StringComparison.OrdinalIgnoreCase)
-                            || rnam.Equals(["float", "climb"], StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "d";
-                    //EVG Squeeze
-                    else if (edid.ContainsNullable("squeeze", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "e";
-                    //CC Fishing
-                    else if (full.ContainsNullable("fishing supplies", StringComparison.OrdinalIgnoreCase))
-                        iconCharacter = "I";
-                    else
-                        iconCharacter = "W";
-
-                    //Create entry for record
-                    var record = new Record
-                    {
-                        form_id = PackageFormKey(activator.FormKey),
-                        type = "ACTI RNAM",
-                        @string = PackageIcon(iconCharacter, iconColor)
-
-                    };
-                    activators.Add(record);
-                }
+                var florae = ProcessFlora(plugin, env, iconColor);
+                var activators = ProcessActivators(plugin, env, iconColor);
 
                 if (florae.Count > 0 || activators.Count > 0)
                 {
                     Console.WriteLine(plugin.ModKey.FileName);
-                    var jsonDirectory = Directory.CreateDirectory(plugin.ModKey.FileName);
-                    Directory.SetCurrentDirectory(jsonDirectory.Name);
-                    var jsonPath = plugin.ModKey.Name.ToLower();
-                    var floraJsonStrings = JsonSerializer.Serialize(florae, serializeOptions);
-                    if (florae.Count > 0)
-                        File.WriteAllText(jsonPath + "flora.json", floraJsonStrings);
-                    var activatorJsonStrings = JsonSerializer.Serialize(activators, serializeOptions);
-                    if (activators.Count > 0)
-                        File.WriteAllText(jsonPath + "acti.json", activatorJsonStrings);
-                    Directory.SetCurrentDirectory(dsdPath.FullName);
-                }
+                    var jsonDirectory = Path.Combine(dsdPath, plugin.ModKey.FileName);
+                    Directory.CreateDirectory(jsonDirectory);
 
+                    if (florae.Count > 0)
+                        File.WriteAllText(Path.Combine(jsonDirectory, $"{plugin.ModKey.Name.ToLower()}flora.json"),
+                            JsonSerializer.Serialize(florae, serializeOptions));
+                    if (activators.Count > 0)
+                        File.WriteAllText(Path.Combine(jsonDirectory, $"{plugin.ModKey.Name.ToLower()}acti.json"),
+                            JsonSerializer.Serialize(activators, serializeOptions));
+                }
             }
         }
 
-        [System.Text.RegularExpressions.GeneratedRegex(@"color\s*=\s*['""]#([0-9A-Fa-f]{6})['""]")]
-        private static partial System.Text.RegularExpressions.Regex MyRegex();
+        private static List<Record> ProcessFlora(ISkyrimModGetter plugin, IGameEnvironment<ISkyrimMod, ISkyrimModGetter> env, string? iconColor)
+        {
+            var florae = new List<Record>();
+            foreach (var flora in plugin.Florae)
+            {
+                if (flora.FormKey.ModKey != plugin.ModKey)
+                {
+                    var origin = flora.FormKey.ToLink<IFloraGetter>().ResolveAll(env.LinkCache).Last();
+                    if (flora.ActivateTextOverride == origin.ActivateTextOverride && flora.Name == origin.Name) continue;
+                }
+
+                string iconCharacter = GetFloraIcon(flora);
+
+                var record = new Record(
+                    PackageFormKey(flora.FormKey),
+                    "FLOR RNAM",
+                    PackageIcon(iconCharacter, iconColor)
+                );
+                florae.Add(record);
+            }
+            return florae;
+        }
+
+        private static string GetFloraIcon(IFloraGetter flora)
+        {
+            var full = flora.Name?.String;
+            var rnam = flora.ActivateTextOverride?.String;
+
+            if (flora.HarvestSound.FormKey.Equals(Skyrim.SoundDescriptor.ITMIngredientMushroomUp.FormKey)
+                || full.Contains(["spore", "cap", "crown", "shroom"], StringComparison.OrdinalIgnoreCase))
+                return "A";
+            if (flora.HarvestSound.FormKey.Equals(Skyrim.SoundDescriptor.ITMIngredientClamUp.FormKey)
+                || full.ContainsNullable("clam", StringComparison.OrdinalIgnoreCase))
+                return "b";
+            if (flora.HarvestSound.FormKey.Equals(Skyrim.SoundDescriptor.ITMPotionUpSD.FormKey)
+                || rnam.ContainsNullable("fill bottles", StringComparison.OrdinalIgnoreCase)
+                || full.Contains(["barrel", "cask"], StringComparison.OrdinalIgnoreCase))
+                return "L";
+            if (flora.HarvestSound.FormKey.Equals(Skyrim.SoundDescriptor.ITMCoinPouchUp.FormKey)
+                || flora.HarvestSound.FormKey.Equals(Skyrim.SoundDescriptor.ITMCoinPouchDown.FormKey)
+                || full.ContainsNullable("coin purse", StringComparison.OrdinalIgnoreCase))
+                return "S";
+            if (rnam.Equals(["catch", "scavenge"], StringComparison.OrdinalIgnoreCase))
+                return "S";
+            return "Q";
+        }
+
+        private static List<Record> ProcessActivators(ISkyrimModGetter plugin, IGameEnvironment<ISkyrimMod, ISkyrimModGetter> env, string? iconColor)
+        {
+            var activators = new List<Record>();
+            foreach (var activator in plugin.Activators)
+            {
+                if (activator.FormKey.ModKey != plugin.ModKey)
+                {
+                    var origin = activator.FormKey.ToLink<IActivatorGetter>().ResolveAll(env.LinkCache).Last();
+                    if (activator.ActivateTextOverride?.String == origin.ActivateTextOverride?.String && activator.Name?.String == origin.Name?.String) continue;
+                }
+
+                var (iconCharacter, colorOverride) = GetActivatorIconAndColor(activator);
+                var record = new Record(
+                    PackageFormKey(activator.FormKey),
+                    "ACTI RNAM",
+                    PackageIcon(iconCharacter, colorOverride ?? iconColor)
+                );
+                activators.Add(record);
+            }
+            return activators;
+        }
+
+        private static (string icon, string? colorOverride) GetActivatorIconAndColor(IActivatorGetter activator)
+        {
+            var full = activator.Name?.String;
+            var edid = activator.EditorID;
+            var rnam = activator.ActivateTextOverride?.String;
+
+            // Exclude superfluous entries
+            if (activator.ActivateTextOverride == null && edid.Contains(["trigger", "fx"], StringComparison.OrdinalIgnoreCase))
+                return (string.Empty, null);
+
+            if (rnam.EqualsNullable("steal", StringComparison.OrdinalIgnoreCase))
+                return ("S", "#ff0000");
+            if (rnam.EqualsNullable("pickpocket", StringComparison.OrdinalIgnoreCase))
+                return ("b", "#ff0000");
+            if (rnam.EqualsNullable("steal from", StringComparison.OrdinalIgnoreCase))
+                return ("V", "#ff0000");
+            if (rnam.EqualsNullable("close", StringComparison.OrdinalIgnoreCase))
+                return ("X", "#dddddd");
+            if (full.EqualsNullable("chest", StringComparison.OrdinalIgnoreCase)
+                || rnam.EqualsNullable("search", StringComparison.OrdinalIgnoreCase)
+                || (full.ContainsNullable("chest", StringComparison.OrdinalIgnoreCase) && rnam.EqualsNullable("open", StringComparison.OrdinalIgnoreCase)))
+                return ("V", null);
+            if (rnam.Equals(["grab", "touch"], StringComparison.OrdinalIgnoreCase))
+                return ("S", null);
+            if ((activator.Keywords != null && activator.Keywords.Contains(Skyrim.Keyword.ActivatorLever.FormKey))
+                || full.ContainsNullable("lever", StringComparison.OrdinalIgnoreCase)
+                || edid.ContainsNullable("pullbar", StringComparison.OrdinalIgnoreCase))
+                return ("D", null);
+            if (full.ContainsNullable("chain", StringComparison.OrdinalIgnoreCase))
+                return ("E", null);
+            if (rnam.EqualsNullable("mine", StringComparison.OrdinalIgnoreCase))
+                return ("G", null);
+            if (full.ContainsNullable("button", StringComparison.OrdinalIgnoreCase)
+                || rnam.Equals(["press", "examine", "push", "investigate"], StringComparison.OrdinalIgnoreCase))
+                return ("F", null);
+            if (full.ContainsNullable("ledger", StringComparison.OrdinalIgnoreCase)
+                || rnam.EqualsNullable("write", StringComparison.OrdinalIgnoreCase))
+                return ("H", null);
+            if (full.Contains(["shrine", "altar"], StringComparison.OrdinalIgnoreCase)
+                || edid.ContainsNullable("dlc2standingstone", StringComparison.OrdinalIgnoreCase)
+                || rnam.Equals(["pray", "worship"], StringComparison.OrdinalIgnoreCase))
+                return ("C", null);
+            if (rnam.EqualsNullable("drink", StringComparison.OrdinalIgnoreCase))
+                return ("J", null);
+            if (rnam.EqualsNullable("eat", StringComparison.OrdinalIgnoreCase))
+                return ("K", null);
+            if (rnam.Equals(["drop", "place", "exchange"], StringComparison.OrdinalIgnoreCase))
+                return ("N", null);
+            if (rnam.EqualsNullable("pick up", StringComparison.OrdinalIgnoreCase))
+                return ("O", null);
+            if (rnam.EqualsNullable("read", StringComparison.OrdinalIgnoreCase))
+                return ("P", null);
+            if (rnam.EqualsNullable("harvest", StringComparison.OrdinalIgnoreCase))
+                return ("Q", null);
+            if (rnam.Equals(["take", "catch"], StringComparison.OrdinalIgnoreCase))
+                return ("S", null);
+            if (rnam.Equals(["talk", "speak"], StringComparison.OrdinalIgnoreCase))
+                return ("T", null);
+            if (rnam.EqualsNullable("sit", StringComparison.OrdinalIgnoreCase))
+                return ("U", null);
+            if (rnam.EqualsNullable("open", StringComparison.OrdinalIgnoreCase))
+                return ("X", null);
+            if (rnam.EqualsNullable("activate", StringComparison.OrdinalIgnoreCase))
+                return ("Y", null);
+            if (rnam.EqualsNullable("unlock", StringComparison.OrdinalIgnoreCase))
+                return ("Z", null);
+            if (rnam.EqualsNullable("sleep", StringComparison.OrdinalIgnoreCase)
+                || full.Contains(["bed", "hammock", "coffin"], StringComparison.OrdinalIgnoreCase))
+                return ("a", null);
+            if (edid.ContainsNullable("sconce", StringComparison.OrdinalIgnoreCase))
+                return ("i", null);
+            if (full.ContainsNullable("keyhole", StringComparison.OrdinalIgnoreCase))
+                return ("j", null);
+            if (edid.ContainsNullable("cwmap", StringComparison.OrdinalIgnoreCase))
+                return ("F", null);
+            if (edid.ContainsNullable("ladder", StringComparison.OrdinalIgnoreCase)
+                || rnam.Equals(["float", "climb"], StringComparison.OrdinalIgnoreCase))
+                return ("d", null);
+            if (edid.ContainsNullable("squeeze", StringComparison.OrdinalIgnoreCase))
+                return ("e", null);
+            if (full.ContainsNullable("fishing supplies", StringComparison.OrdinalIgnoreCase))
+                return ("I", null);
+
+            return ("W", null);
+        }
     }
 }
