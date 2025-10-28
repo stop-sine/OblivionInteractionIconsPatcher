@@ -10,9 +10,6 @@ using Mutagen.Bethesda.Environments;
 using Mutagen.Bethesda.Skyrim;
 using Mutagen.Bethesda.FormKeys.SkyrimSE;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Order.DI;
-using Mutagen.Bethesda.Plugins.Records;
-using Mutagen.Bethesda.Plugins.Aspects;
 
 namespace OblivionInteractionIconsPatcher
 {
