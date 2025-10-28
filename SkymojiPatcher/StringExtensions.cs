@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OblivionInteractionIconsPatcher
+namespace SkymojiPatcher
 {
     /// <summary>
     /// Extension methods for string and string collections.

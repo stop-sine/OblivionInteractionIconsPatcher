@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Skyrim;
 using Mutagen.Bethesda.FormKeys.SkyrimSE;
 using Mutagen.Bethesda.Plugins;
 
-namespace OblivionInteractionIconsPatcher
+namespace SkymojiPatcher
 {
     /// <summary>
     /// Main patcher logic for generating interaction icon JSON files for Skyrim mods.
@@ -186,10 +186,10 @@ namespace OblivionInteractionIconsPatcher
                     Console.WriteLine(plugin.ModKey.FileName);
                     var test = Directory.CreateDirectory(jsonDirectory);
                     if (florae.Count > 0)
-                        File.WriteAllText(Path.Combine(jsonDirectory, $"skymoji_{plugin.ModKey.Name.ToLower()}FLOR.json"),
+                        File.WriteAllText(Path.Combine(jsonDirectory, $"ASKMJ_{plugin.ModKey.Name.ToLower()}FLOR.json"),
                             JsonSerializer.Serialize(florae, serializeOptions));
                     if (activators.Count > 0)
-                        File.WriteAllText(Path.Combine(jsonDirectory, $"skymoji_{plugin.ModKey.Name.ToLower()}ACTI.json"),
+                        File.WriteAllText(Path.Combine(jsonDirectory, $"ASKMJ_{plugin.ModKey.Name.ToLower()}ACTI.json"),
                             JsonSerializer.Serialize(activators, serializeOptions));
                     patched++;
                 }
@@ -209,7 +209,9 @@ namespace OblivionInteractionIconsPatcher
                 if (flora.FormKey.ModKey != plugin.ModKey)
                 {
                     var origin = flora.FormKey.ToLink<IFloraGetter>().ResolveAll(env.LinkCache).Last();
-                    if (flora.ActivateTextOverride == origin.ActivateTextOverride && flora.Name == origin.Name) continue;
+                    if (flora.ActivateTextOverride == origin.ActivateTextOverride &&
+                    flora.Name == origin.Name &&
+                    flora.HarvestSound == origin.HarvestSound) continue;
                 }
 
                 string iconCharacter = GetFloraIcon(flora);
@@ -269,7 +271,9 @@ namespace OblivionInteractionIconsPatcher
                 if (activator.FormKey.ModKey != plugin.ModKey)
                 {
                     var origin = activator.FormKey.ToLink<IActivatorGetter>().ResolveAll(env.LinkCache).Last();
-                    if (activator.ActivateTextOverride?.String == origin.ActivateTextOverride?.String && activator.Name?.String == origin.Name?.String) continue;
+                    if (activator.ActivateTextOverride?.String == origin.ActivateTextOverride?.String &&
+                    activator.Name?.String == origin.Name?.String &&
+                    activator.EditorID == origin.EditorID) continue;
                 }
 
                 var (iconCharacter, colorOverride) = GetActivatorIconAndColor(activator);

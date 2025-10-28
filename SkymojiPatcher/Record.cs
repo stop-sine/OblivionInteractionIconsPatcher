@@ -1,4 +1,4 @@
-namespace OblivionInteractionIconsPatcher
+namespace SkymojiPatcher
 {
     /// <summary>
     /// Represents a record for output JSON.
