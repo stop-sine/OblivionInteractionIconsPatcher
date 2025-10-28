@@ -186,10 +186,10 @@ namespace OblivionInteractionIconsPatcher
                     Console.WriteLine(plugin.ModKey.FileName);
                     var test = Directory.CreateDirectory(jsonDirectory);
                     if (florae.Count > 0)
-                        File.WriteAllText(Path.Combine(jsonDirectory, $"{plugin.ModKey.Name.ToLower()}flora.json"),
+                        File.WriteAllText(Path.Combine(jsonDirectory, $"skymoji_{plugin.ModKey.Name.ToLower()}FLOR.json"),
                             JsonSerializer.Serialize(florae, serializeOptions));
                     if (activators.Count > 0)
-                        File.WriteAllText(Path.Combine(jsonDirectory, $"{plugin.ModKey.Name.ToLower()}acti.json"),
+                        File.WriteAllText(Path.Combine(jsonDirectory, $"skymoji_{plugin.ModKey.Name.ToLower()}ACTI.json"),
                             JsonSerializer.Serialize(activators, serializeOptions));
                     patched++;
                 }
