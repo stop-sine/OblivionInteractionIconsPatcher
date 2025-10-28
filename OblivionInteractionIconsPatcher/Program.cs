@@ -3,12 +3,16 @@ using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using CommandLine;
 using Noggog;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Environments;
 using Mutagen.Bethesda.Skyrim;
 using Mutagen.Bethesda.FormKeys.SkyrimSE;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Order.DI;
+using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Plugins.Aspects;
 
 namespace OblivionInteractionIconsPatcher
 {
@@ -17,6 +21,16 @@ namespace OblivionInteractionIconsPatcher
     /// </summary>
     partial class Program
     {
+        public class Options
+        {
+            // [Option('m', "mo2", Required = false, Default = false, HelpText = "Using Mod Organizer 2 Virtual File System.")]
+            // public bool ModOrganizer2 { get; set; }
+            [Option('s', "single", Required = false, HelpText = "Path to individual mod directory.")]
+            public string? Single { get; set; }
+            [Option('o', "override", Required = false, Default = false, HelpText = "Override existing configuration files (not recommended).")]
+            public bool Override { get; set; }
+        }
+
         /// <summary>
         /// Regex to extract color hex code from a string.
         /// </summary>
@@ -64,8 +78,25 @@ namespace OblivionInteractionIconsPatcher
             mod is not null &&
             !BethesdaPlugins.Contains(mod.ModKey) &&
             !CreationClubPlugins.Contains(mod.ModKey) &&
-            !mod.ModKey.Name.Contains("skymoji") &&
+            !mod.ModKey.Name.Contains("skymoji", StringComparison.OrdinalIgnoreCase) &&
+            !mod.ModKey.Name.Equals(["3DNPC", "3DNPC0", "3DNPC1"], StringComparison.OrdinalIgnoreCase) &&
             (mod.Florae.Count > 0 || mod.Activators.Count > 0);
+
+        /// <summary>
+        /// Determines whether a plugin's output directory should be (re)generated.
+        /// Returns true if the directory does not exist or does not contain any "acti" or "flora" files,
+        /// meaning patching should proceed. Returns false if such files already exist, indicating patching can be skipped.
+        /// </summary>
+        /// <param name="mod">The mod/plugin to check for existing output.</param>
+        /// <param name="path">The root path to the DynamicStringDistributor output directory.</param>
+        /// <returns>True if patching should proceed; false if output already exists.</returns>
+        private static bool OverrideFilter(ISkyrimModGetter mod, string path)
+        {
+            var modDir = Path.Combine(path, mod.ModKey.FileName);
+            if (!Directory.Exists(modDir)) return true;
+            return !Directory.EnumerateFiles(modDir)
+                .Any(f => f.Contains("acti") || f.Contains("flora"));
+        }
 
         /// <summary>
         /// Formats a FormKey as a string for JSON output.
@@ -78,38 +109,28 @@ namespace OblivionInteractionIconsPatcher
         /// </summary>
         private static string PackageIcon(string iconCharacter, string? iconColor) =>
             !iconColor.IsNullOrEmpty()
-                ? $"<font color='{iconColor}'><font face='$Iconographia'> {iconCharacter} </font></font>"
+                ? $"<font color='#{iconColor}'><font face='$Iconographia'> {iconCharacter} </font></font>"
                 : $"<font face='$Iconographia'> {iconCharacter} </font>";
 
-        /// <summary>
-        /// Sanitizes a filename by removing invalid path characters and restricting directory traversal.
-        /// </summary>
-        private static string SanitizeFileName(string fileName)
-        {
-            // Remove invalid file/path characters
-            var invalidChars = Path.GetInvalidFileNameChars();
-            var sanitized = new string([.. fileName.Where(c => !invalidChars.Contains(c))]);
-
-            // Prevent directory traversal
-            sanitized = sanitized.Replace(".", "").Replace("\\", "").Replace("/", "");
-
-            // Optionally, restrict length
-            if (sanitized.Length > 100)
-                sanitized = sanitized[..100];
-
-            return sanitized;
-        }
+        // private static (ModKey, List<Record>?, List<Record>?) ProccessPlugin(ISkyrimModGetter plugin, IGameEnvironment<ISkyrimMod, ISkyrimModGetter> env, string iconColor)
+        // {
+        //     var florae = ProcessFlora(plugin, env, iconColor);
+        //     var activators = ProcessActivators(plugin, env, iconColor);
+        //     return (plugin.ModKey, florae, activators);
+        // }
 
         /// <summary>
         /// Main entry point. Processes all enabled plugins and writes flora/activator icon JSON files.
         /// </summary>
         public static void Main(string[] args)
         {
+            //string rootDirectory;
+            Parser.Default.ParseArguments<Options>(args).WithParsed(o => { });
+
             // Set up Skyrim SE environment and output directory
             var env = GameEnvironment.Typical.Skyrim(SkyrimRelease.SkyrimSE);
             var dataPath = env.DataFolderPath.Path;
-            var dsdPath = Path.Combine(dataPath, "SKSE\\Plugins\\DynamicStringDistributor1");
-            Directory.CreateDirectory(dsdPath);
+            var dsdPath = Path.Combine(dataPath, "SKSE\\Plugins\\DynamicStringDistributor");
 
             // Try to extract icon color from skymoji JSON if present
             string? iconColor = null;
@@ -124,6 +145,8 @@ namespace OblivionInteractionIconsPatcher
                         var match = MyRegex().Match(data.First().@string);
                         if (match.Success)
                             iconColor = match.Groups[1].Value;
+                        if (!iconColor.IsNullOrEmpty())
+                            Console.WriteLine($"Found color override {iconColor}");
                     }
                 }
                 catch (JsonException ex)
@@ -138,6 +161,7 @@ namespace OblivionInteractionIconsPatcher
 
             // Get all enabled plugins that pass the filter
             var plugins = env.LoadOrder.ListedOrder.OnlyEnabled().Select(m => m.Mod).Where(PluginFilter).ToList();
+            plugins = [.. plugins.Where(p => p != null && OverrideFilter(p, dsdPath))];
 
             // Set up JSON serialization options
             var serializeOptions = new JsonSerializerOptions
@@ -145,6 +169,9 @@ namespace OblivionInteractionIconsPatcher
                 WriteIndented = true,
                 Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
             };
+
+            Console.WriteLine($"Patching plugin(s)...");
+            var patched = 0;
 
             // Process each plugin
             foreach (var plugin in plugins)
@@ -156,21 +183,21 @@ namespace OblivionInteractionIconsPatcher
                 var activators = ProcessActivators(plugin, env, iconColor);
 
                 // Write JSON files if there are any records
+                var jsonDirectory = Path.Combine(dsdPath, plugin.ModKey.FileName);
                 if (florae.Count > 0 || activators.Count > 0)
                 {
                     Console.WriteLine(plugin.ModKey.FileName);
-
-                    var jsonDirectory = Path.Combine(dsdPath, plugin.ModKey.FileName);
-                    Directory.CreateDirectory(jsonDirectory);
-
+                    var test = Directory.CreateDirectory(jsonDirectory);
                     if (florae.Count > 0)
                         File.WriteAllText(Path.Combine(jsonDirectory, $"{plugin.ModKey.Name.ToLower()}flora.json"),
                             JsonSerializer.Serialize(florae, serializeOptions));
                     if (activators.Count > 0)
                         File.WriteAllText(Path.Combine(jsonDirectory, $"{plugin.ModKey.Name.ToLower()}acti.json"),
                             JsonSerializer.Serialize(activators, serializeOptions));
+                    patched++;
                 }
             }
+            Console.WriteLine($"Succesfully patched {patched} plugin(s)");
         }
 
         /// <summary>
@@ -249,6 +276,7 @@ namespace OblivionInteractionIconsPatcher
                 }
 
                 var (iconCharacter, colorOverride) = GetActivatorIconAndColor(activator);
+                if (iconCharacter.IsNullOrEmpty()) continue;
                 var record = new Record(
                     PackageFormKey(activator.FormKey),
                     "ACTI RNAM",
@@ -269,7 +297,7 @@ namespace OblivionInteractionIconsPatcher
             var rnam = activator.ActivateTextOverride?.String;
 
             // Blacklisting superfluous entries
-            if (activator.ActivateTextOverride == null && edid.Contains(["trigger", "fx"], StringComparison.OrdinalIgnoreCase))
+            if (activator.ActivateTextOverride == null && edid.Contains(["trig", "fx"], StringComparison.OrdinalIgnoreCase))
                 return (string.Empty, null);
             //Steal
             if (rnam.EqualsNullable("steal", StringComparison.OrdinalIgnoreCase))
