@@ -20,12 +20,10 @@ namespace SkymojiPatcher
     {
         public class Options
         {
-            // [Option('m', "mo2", Required = false, Default = false, HelpText = "Using Mod Organizer 2 Virtual File System.")]
-            // public bool ModOrganizer2 { get; set; }
-            [Option('s', "single", Required = false, HelpText = "Path to individual mod directory.")]
-            public string? Single { get; set; }
-            [Option('o', "override", Required = false, Default = false, HelpText = "Override existing configuration files (not recommended).")]
-            public bool Override { get; set; }
+            [Option('p', "path", Required = false, HelpText = "Path to individual mod directory.")]
+            public string? Path { get; set; }
+            [Option('c', "color", Required = false, Default = false, HelpText = "Color preset for icons.")]
+            public bool Color { get; set; }
         }
 
         /// <summary>
@@ -92,7 +90,7 @@ namespace SkymojiPatcher
             var modDir = Path.Combine(path, mod.ModKey.FileName);
             if (!Directory.Exists(modDir)) return true;
             return !Directory.EnumerateFiles(modDir)
-                .Any(f => f.Contains("acti") || f.Contains("flora"));
+                .Any(f => f.Contains("acti") || f.Contains("flora") || (f.Contains("SKMJ_") && !f.Contains("ASKMJ_")));
         }
 
         /// <summary>
@@ -156,7 +154,7 @@ namespace SkymojiPatcher
                 }
             }
 
-            // Get all enabled plugins that pass the filter
+            // Get all enabled plugins that pass filters
             var plugins = env.LoadOrder.ListedOrder.OnlyEnabled().Select(m => m.Mod).Where(PluginFilter).ToList();
             plugins = [.. plugins.Where(p => p != null && OverrideFilter(p, dsdPath))];
 
@@ -179,18 +177,16 @@ namespace SkymojiPatcher
                 var florae = ProcessFlora(plugin, env, iconColor);
                 var activators = ProcessActivators(plugin, env, iconColor);
 
+                var records = florae.Concat(activators).ToList();
+
                 // Write JSON files if there are any records
-                var jsonDirectory = Path.Combine(dsdPath, plugin.ModKey.FileName);
-                if (florae.Count > 0 || activators.Count > 0)
+                if (records.Count > 0)
                 {
                     Console.WriteLine(plugin.ModKey.FileName);
-                    var test = Directory.CreateDirectory(jsonDirectory);
-                    if (florae.Count > 0)
-                        File.WriteAllText(Path.Combine(jsonDirectory, $"ASKMJ_{plugin.ModKey.Name.ToLower()}FLOR.json"),
-                            JsonSerializer.Serialize(florae, serializeOptions));
-                    if (activators.Count > 0)
-                        File.WriteAllText(Path.Combine(jsonDirectory, $"ASKMJ_{plugin.ModKey.Name.ToLower()}ACTI.json"),
-                            JsonSerializer.Serialize(activators, serializeOptions));
+                    var jsonDirectory = Path.Combine(dsdPath, plugin.ModKey.FileName);
+                    Directory.CreateDirectory(jsonDirectory);
+                    File.WriteAllText(Path.Combine(jsonDirectory, $"ASKMJ_{plugin.ModKey.Name.ToLower()}.json"),
+                        JsonSerializer.Serialize(records, serializeOptions));
                     patched++;
                 }
             }
@@ -205,7 +201,7 @@ namespace SkymojiPatcher
             var florae = new List<Record>();
             foreach (var flora in plugin.Florae)
             {
-                // Skip if flora is unchanged from its origin
+                // Skip if flora record is unchanged from its origin
                 if (flora.FormKey.ModKey != plugin.ModKey)
                 {
                     var origin = flora.FormKey.ToLink<IFloraGetter>().ResolveAll(env.LinkCache).Last();
@@ -276,7 +272,7 @@ namespace SkymojiPatcher
                     activator.EditorID == origin.EditorID) continue;
                 }
 
-                var (iconCharacter, colorOverride) = GetActivatorIconAndColor(activator);
+                var (iconCharacter, colorOverride) = GetActivatorIcon(activator);
                 if (iconCharacter.IsNullOrEmpty()) continue;
                 var record = new Record(
                     PackageFormKey(activator.FormKey),
@@ -291,7 +287,7 @@ namespace SkymojiPatcher
         /// <summary>
         /// Determines the icon character and color override for an activator record.
         /// </summary>
-        private static (string icon, string? colorOverride) GetActivatorIconAndColor(IActivatorGetter activator)
+        private static (string icon, string? colorOverride) GetActivatorIcon(IActivatorGetter activator)
         {
             var full = activator.Name?.String;
             var edid = activator.EditorID;
